@@ -1,10 +1,22 @@
+const admin = require("firebase-admin");
+admin.initializeApp();
 import * as functions from "firebase-functions";
-import getAccessToken from "./twilio/getAccessToken";
+// import { Task } from "./model";
+// import { handleTappCreate } from "./tapp/onTappCreate";
+import {createTwilioRoom, connectToTwilioRoom} from "./twilio/createRoom";
 
-// // Start writing Firebase Functions
-// // https://firebase.google.com/docs/functions/typescript
-//
-export const getTwilioAccessToken = functions.https.onCall((request: any) => {
-  functions.logger.log("getTwilioAccessToken");
-  getAccessToken();
+export const createTappRoom = functions.https.onCall(async (request: any) => {
+  functions.logger.log("createTappRoom");
+  return createTwilioRoom(request.tapp, request.user);
+});
+
+export const connectToTappRoom = functions.https.onCall(async (request: any) => {
+  functions.logger.log("connectToTappRoom");
+  return connectToTwilioRoom(request.tapp, request.user);
+});
+
+export const onTappCreate = functions.firestore.document("task/{id}").onCreate(snapshot => {
+  functions.logger.log('onTappCreate: 2');
+  functions.logger.log("onTappCreatee");
+  // handleTappCreate(snapshot.data() as Task);
 });
