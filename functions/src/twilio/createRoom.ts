@@ -30,7 +30,6 @@ export const createTwilioRoom = async (tapp: Task, user: string) => {
   const conference: TwilioConference = {
     id: ref.id,
     tapp: tapp.id,
-    token: token.toJwt(),
     createdAt: Date.now(),
     isStale: false,
   };

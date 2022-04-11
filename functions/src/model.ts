@@ -111,6 +111,7 @@ export enum NOTIFICATION_TYPE {
   TAPP_COMPLETED,
   TAPP_UPDATED,
   ASSIGNED_TAPP,
+  NEW_TAPP_MESSAGE,
 }
 
 export enum TAPP_TYPE {
@@ -160,12 +161,15 @@ export type UserNotification = {
   user: string;
   hasBeenRead: boolean;
   createdDate: number;
+  type: NOTIFICATION_TYPE;
+  task: string;
+  message: string;
+  isSubtask?: boolean;
+  subtaskId?: string;
 };
-
 export type TwilioConference = {
   id: string;
   tapp: string;
-  token: string;
   createdAt: number;
   isStale: boolean;
 };

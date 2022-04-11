@@ -17,3 +17,12 @@ export const createNewAssignedTappNotification = (sender: string) => {
   const body = 'Tap here to see learn more.';
   return createNotificationContent(title, body);
 };
+
+/**
+ * Sent when someone has sent a message
+ */
+ export const createNewMessageNotification = (sender: string, message: string) => {
+  const title = `${sender} has sent you a message.`;
+  const body = message;
+  return createNotificationContent(title, body);
+};

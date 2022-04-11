@@ -4,30 +4,28 @@ import * as functions from "firebase-functions";
 import { NOTIFICATION_TYPE, User, UserNotification } from "../model";
 import { sendNotifications } from "../notifications/Dispatcher";
 import { NotificationInstruction } from "../notifications/model";
-import { createNewAssignedTappNotification } from "../notifications/NotificationFactory";
+import { createNewMessageNotification } from "../notifications/NotificationFactory";
 import { USER_NOTIFICATION_PATH, USER_PATH } from "../paths";
 import { getDocumentsFromQuerySnapshot } from "../util";
 
-type TappCreatedProps = {
-  owner: string;
-  phoneNumbersToNotify: string[];
-  task: string;
+type TappMessageSentProps = {
+  sender: string; // name
+  recipients: string[]; // phone
+  message: string;
+  task: string; // id
 };
 
-export const handleTappCreate = async (props: TappCreatedProps) => {
-  functions.logger.log('handleTappCreate: ', props);
-  const {owner, phoneNumbersToNotify, task} = props;
-  
-  
-  let usersToNotify: string[] = [];
-  
+export const handleTappMessageSent = async (props: TappMessageSentProps) => {
+  const {sender, recipients, message, task} = props;
+
   const userDocsRef = db.collection(USER_PATH);
-  const userDocs = await userDocsRef.where('phone', 'in', phoneNumbersToNotify).get();
-  functions.logger.log('userDocs', userDocs);
-  
+  const userDocs = await userDocsRef.where('phone', 'in', recipients).get();
+
   const users = getDocumentsFromQuerySnapshot(userDocs) as User[];
-  
+  functions.logger.log('users: ', users);
+
   const batch = db.batch();
+  let usersToNotify: string[] = [];
 
   for (let i = 0; i < users.length; i++) {
     const user = users[i];
@@ -37,9 +35,9 @@ export const handleTappCreate = async (props: TappCreatedProps) => {
       user: user.id,
       hasBeenRead: false,
       createdDate: Date.now(),
-      type: NOTIFICATION_TYPE.ASSIGNED_TAPP,
+      type: NOTIFICATION_TYPE.NEW_TAPP_MESSAGE,
       task,
-      message: `${owner} has assigned you a Tapp`
+      message: `${sender} has sent you a message`
     };
     batch.set(notificationRef, newNotification);
     usersToNotify.push(user.fcmToken);
@@ -47,11 +45,14 @@ export const handleTappCreate = async (props: TappCreatedProps) => {
   functions.logger.log('usersToNotify', usersToNotify);
   batch.commit();
 
-  const notification: NotificationInstruction = {
-    recipients: usersToNotify,
-    content: createNewAssignedTappNotification(owner),
-  };
-
-  sendNotifications(notification);
-
+  try {
+    const notification: NotificationInstruction = {
+      recipients: usersToNotify,
+      content: createNewMessageNotification(sender, message),
+    };
+  
+    sendNotifications(notification);
+  } catch (e) {
+    functions.logger.error('error sending Tapp message notification: ', e);
+  }
 };
