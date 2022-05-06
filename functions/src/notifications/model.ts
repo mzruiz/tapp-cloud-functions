@@ -1,6 +1,7 @@
 export type NotificationInstruction = {
   recipients: string[]; // The ids for each user
   content: NotificationContent;
+  payload: PayloadData;
 };
 
 export type NotificationContent = {
@@ -13,3 +14,7 @@ export type NotificationContent = {
 export type FCMTokenDoc = {
   token: string;
 };
+
+export type PayloadData = {
+  [key: string]: string;
+}

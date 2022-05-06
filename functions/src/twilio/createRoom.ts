@@ -1,6 +1,10 @@
 import * as functions from "firebase-functions";
-import { Task, TwilioConference } from "../model";
-import { TWILIO_CONFERENCE_PATH } from "../paths";
+import { Contact, Task, TwilioConference, User, UserAssignee } from "../model";
+import { sendNotifications } from "../notifications/Dispatcher";
+import { NotificationInstruction } from "../notifications/model";
+import { createVideoCallStartedNotification } from "../notifications/NotificationFactory";
+import { CONTACT_PATH, TASK_ASSIGNEE_PATH, TWILIO_CONFERENCE_PATH, USER_PATH } from "../paths";
+import { getDocumentsFromQuerySnapshot } from "../util";
 const admin = require('firebase-admin');
 const db = admin.firestore();
 const AccessToken = require('twilio').jwt.AccessToken;
@@ -14,10 +18,10 @@ const client = require('twilio')(ACCOUNT_SID, AUTH_TOKEN);
 // const ROOM_NAME = '';
 // const PASSCODE = '';
 
-export const createTwilioRoom = async (tapp: Task, user: string) => {
+export const createTwilioRoom = async (tapp: Task, user: User) => {
   functions.logger.log('createTwilioRoom: ', tapp, user);
   
-  const identity = user;
+  const identity = user.phone;
   const videoGrant = new VideoGrant({
     room: tapp.id,
   });
@@ -39,7 +43,9 @@ export const createTwilioRoom = async (tapp: Task, user: string) => {
     return functions.logger.log('room created: ', room, room.sid);
   });
 
-  return conference;
+  sendNewVideoCallNotification(tapp.collaborators, user.firstName, tapp, conference.id);
+
+  return {conference, token: token.toJwt()};
 };
 
 export const connectToTwilioRoom = async (tapp: string, user: string) => {
@@ -55,4 +61,51 @@ export const connectToTwilioRoom = async (tapp: string, user: string) => {
   functions.logger.log('token: ', token);
 
   return token.toJwt();
+};
+
+/**
+ * TO DO: Handle when there are more than 10 taskAssignees on a Tapp
+ * @param collaborators
+ */
+const sendNewVideoCallNotification = async (collaborators: string[], initiator: string, tapp: Task, conference: string) => {
+  const taskAssigneesRef = db.collection(TASK_ASSIGNEE_PATH);
+  const taskAssigneeDocs = await taskAssigneesRef.where('id', 'in', collaborators).get();
+  
+  // TO DO: Support Groups being a TaskAssignee
+  const taskAssignees = getDocumentsFromQuerySnapshot(taskAssigneeDocs) as UserAssignee[];
+  functions.logger.log('taskAssigneeDocs', taskAssigneeDocs);
+
+  const contactIds = taskAssignees.map(taskAssignee => taskAssignee.contactId);
+
+  const contactsRef = db.collection(CONTACT_PATH);
+  const contactsDocs = await contactsRef.where('id', 'in', contactIds).get();
+
+  const contacts = getDocumentsFromQuerySnapshot(contactsDocs) as Contact[];
+  functions.logger.log('contacts', contacts);
+
+  const userPhones = contacts.map(contact => contact.phone);
+
+  const usersRef = db.collection(USER_PATH);
+  const userDocs = await usersRef.where('phone', 'in', userPhones).get();
+
+  const users = getDocumentsFromQuerySnapshot(userDocs) as User[];
+  functions.logger.log('users', users);
+
+  const tokens = users.map(user => user.fcmToken);
+
+  try {
+    const notification: NotificationInstruction = {
+      recipients: tokens,
+      content: createVideoCallStartedNotification(initiator, tapp.title),
+      payload: {
+        tapp: tapp.id,
+        conference,
+      },
+    };
+  
+    sendNotifications(notification);
+  } catch (e) {
+    functions.logger.error('error sending Tapp message notification: ', e);
+  }
+
 };

@@ -1,22 +1,23 @@
 const admin = require('firebase-admin');
 const db = admin.firestore();
 import * as functions from "firebase-functions";
-import { NOTIFICATION_TYPE, User, UserNotification } from "../model";
+import { NOTIFICATION_TYPE, User } from "../model";
 import { sendNotifications } from "../notifications/Dispatcher";
 import { NotificationInstruction } from "../notifications/model";
 import { createNewMessageNotification } from "../notifications/NotificationFactory";
-import { USER_NOTIFICATION_PATH, USER_PATH } from "../paths";
-import { getDocumentsFromQuerySnapshot } from "../util";
+import { USER_PATH } from "../paths";
+import { createNewUserNotification, getDocumentsFromQuerySnapshot } from "../util";
 
 type TappMessageSentProps = {
   sender: string; // name
   recipients: string[]; // phone
   message: string;
   task: string; // id
+  messageThread: string; // id
 };
 
 export const handleTappMessageSent = async (props: TappMessageSentProps) => {
-  const {sender, recipients, message, task} = props;
+  const {sender, recipients, message, task, messageThread} = props;
 
   const userDocsRef = db.collection(USER_PATH);
   const userDocs = await userDocsRef.where('phone', 'in', recipients).get();
@@ -29,16 +30,8 @@ export const handleTappMessageSent = async (props: TappMessageSentProps) => {
 
   for (let i = 0; i < users.length; i++) {
     const user = users[i];
-    const notificationRef = db.collection(USER_NOTIFICATION_PATH).doc();
-    const newNotification: UserNotification = {
-      id: notificationRef.id,
-      user: user.id,
-      hasBeenRead: false,
-      createdDate: Date.now(),
-      type: NOTIFICATION_TYPE.NEW_TAPP_MESSAGE,
-      task,
-      message: `${sender} has sent you a message`
-    };
+    const notification = createNewUserNotification({user: user.id, type: NOTIFICATION_TYPE.NEW_TAPP_MESSAGE, task: task, message: `${sender} has sent you a message`})
+    const {notificationRef, newNotification} = notification;
     batch.set(notificationRef, newNotification);
     usersToNotify.push(user.fcmToken);
   }
@@ -49,6 +42,10 @@ export const handleTappMessageSent = async (props: TappMessageSentProps) => {
     const notification: NotificationInstruction = {
       recipients: usersToNotify,
       content: createNewMessageNotification(sender, message),
+      payload: {
+        messageThread,
+        tapp: task,
+      }
     };
   
     sendNotifications(notification);
