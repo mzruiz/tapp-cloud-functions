@@ -10,10 +10,11 @@ const db = admin.firestore();
 const AccessToken = require('twilio').jwt.AccessToken;
 const VideoGrant = AccessToken.VideoGrant;
 
-const ACCOUNT_SID = 'ACc8e037ac84ccb99cbf68c1e13775b3d9';
-const API_KEY = 'SK7395a87a2e8930bc996be2759142fc37';
-const API_SECRET = '0IXim0b7zFSfMOiiOC2jv4BSJLOLUbJb';
-const AUTH_TOKEN = 'b336da7588252065bb8745dd84bc849a';
+const ACCOUNT_SID = process.env.ACCOUNT_SID
+const AUTH_TOKEN = process.env.AUTH_TOKEN;
+const API_KEY = process.env.API_KEY;
+const API_SECRET = process.env.API_SECRET;
+
 const client = require('twilio')(ACCOUNT_SID, AUTH_TOKEN);
 // const ROOM_NAME = '';
 // const PASSCODE = '';
@@ -21,6 +22,8 @@ const client = require('twilio')(ACCOUNT_SID, AUTH_TOKEN);
 export const createTwilioRoom = async (tapp: Task, user: User) => {
   functions.logger.log('createTwilioRoom: ', tapp, user);
   
+  // The VideoGrant will give the generated access token (which is needed by the User to get into the Conference)
+  // permission to stream their camera
   const identity = user.phone;
   const videoGrant = new VideoGrant({
     room: tapp.id,
@@ -30,15 +33,16 @@ export const createTwilioRoom = async (tapp: Task, user: User) => {
   token.addGrant(videoGrant);
   functions.logger.log('token: ', token);
 
-  const ref = db.collection(TWILIO_CONFERENCE_PATH).doc();
+  // Add Conference doc to Firebase
   const conference: TwilioConference = {
-    id: ref.id,
+    id: db.collection(TWILIO_CONFERENCE_PATH).doc().id,
     tapp: tapp.id,
     createdAt: Date.now(),
     isStale: false,
   };
   await db.collection(TWILIO_CONFERENCE_PATH).doc(conference.id).set(conference);
 
+  // Create the Video Conference (in Twilio) using the Tapp id as the unique identifier.
   client.video.rooms.create({uniqueName: tapp.id, type: 'peer-to-peer'}).then((room: any) => {
     return functions.logger.log('room created: ', room, room.sid);
   });
@@ -63,18 +67,15 @@ export const connectToTwilioRoom = async (tapp: string, user: string) => {
   return token.toJwt();
 };
 
-/**
- * TO DO: Handle when there are more than 10 taskAssignees on a Tapp
- * @param collaborators
- */
 const sendNewVideoCallNotification = async (collaborators: string[], initiator: string, tapp: Task, conference: string) => {
   const taskAssigneesRef = db.collection(TASK_ASSIGNEE_PATH);
   const taskAssigneeDocs = await taskAssigneesRef.where('id', 'in', collaborators).get();
   
-  // TO DO: Support Groups being a TaskAssignee
+  // Get Collaborators to notify
   const taskAssignees = getDocumentsFromQuerySnapshot(taskAssigneeDocs) as UserAssignee[];
   functions.logger.log('taskAssigneeDocs', taskAssigneeDocs);
 
+  // List of Contacts to retrieve
   const contactIds = taskAssignees.map(taskAssignee => taskAssignee.contactId);
 
   const contactsRef = db.collection(CONTACT_PATH);
@@ -83,6 +84,7 @@ const sendNewVideoCallNotification = async (collaborators: string[], initiator: 
   const contacts = getDocumentsFromQuerySnapshot(contactsDocs) as Contact[];
   functions.logger.log('contacts', contacts);
 
+  // List of Users to retrieve
   const userPhones = contacts.map(contact => contact.phone);
 
   const usersRef = db.collection(USER_PATH);
@@ -91,6 +93,7 @@ const sendNewVideoCallNotification = async (collaborators: string[], initiator: 
   const users = getDocumentsFromQuerySnapshot(userDocs) as User[];
   functions.logger.log('users', users);
 
+  // List of FCM Tokens that we use to send notification
   const tokens = users.map(user => user.fcmToken);
 
   try {
@@ -98,7 +101,7 @@ const sendNewVideoCallNotification = async (collaborators: string[], initiator: 
       recipients: tokens,
       content: createVideoCallStartedNotification(initiator, tapp.title),
       payload: {
-        tapp: tapp.id,
+        tapp: tapp.id, // Used by the app to take the User to the Tapp
         conference,
       },
     };

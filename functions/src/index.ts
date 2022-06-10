@@ -8,12 +8,10 @@ import { handleTappMessageSent } from "./tapp/onTappMessageSent";
 import {createTwilioRoom, connectToTwilioRoom} from "./twilio/createRoom";
 
 export const createTappRoom = functions.https.onCall(async (request: any) => {
-  functions.logger.log("createTappRoom");
   return createTwilioRoom(request.tapp, request.user);
 });
 
 export const connectToTappRoom = functions.https.onCall(async (request: any) => {
-  functions.logger.log("connectToTappRoom");
   return connectToTwilioRoom(request.tapp, request.user);
 });
 
@@ -24,7 +22,6 @@ export const createNotificationsForNewTapp = functions.https.onCall(async (reque
 export const createNotificationsForTappEdit = functions.https.onCall(async (request: any) => {
   handleTappEdit(request);
 });
-
 
 export const onTappMessageSent = functions.https.onCall(async (request: any) => {
   handleTappMessageSent(request);

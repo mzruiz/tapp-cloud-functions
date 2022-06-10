@@ -13,15 +13,13 @@ export const handleTappEdit = async (props: TappMutatedProps) => {
   functions.logger.log('handleTappEdit: ', props);
   const {owner, phoneNumbersToNotify, task} = props;
   
-  let usersToNotify: string[] = [];
-  
   const userDocsRef = db.collection(USER_PATH);
   const userDocs = await userDocsRef.where('phone', 'in', phoneNumbersToNotify).get();
-  functions.logger.log('userDocs', userDocs);
-  
   const users = getDocumentsFromQuerySnapshot(userDocs) as User[];
+  functions.logger.log('users', users);
   
   const batch = db.batch();
+  let usersToNotify: string[] = [];
 
   for (let i = 0; i < users.length; i++) {
     const user = users[i];
@@ -38,9 +36,9 @@ export const handleTappEdit = async (props: TappMutatedProps) => {
     batch.set(notificationRef, newNotification);
     usersToNotify.push(user.fcmToken);
   }
-  functions.logger.log('usersToNotify', usersToNotify);
   batch.commit();
-
+  
+  functions.logger.log('usersToNotify', usersToNotify);
   const notification: NotificationInstruction = {
     recipients: usersToNotify,
     content: createTappEditNotification(owner),

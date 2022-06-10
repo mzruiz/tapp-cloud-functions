@@ -13,16 +13,16 @@ export const handleTappCreate = async (props: TappMutatedProps) => {
   functions.logger.log('handleTappCreate: ', props);
   const {owner, phoneNumbersToNotify, task} = props;
   
-  let usersToNotify: string[] = [];
   
   const userDocsRef = db.collection(USER_PATH);
   const userDocs = await userDocsRef.where('phone', 'in', phoneNumbersToNotify).get();
+  const users = getDocumentsFromQuerySnapshot(userDocs) as User[];
   functions.logger.log('userDocs', userDocs);
   
-  const users = getDocumentsFromQuerySnapshot(userDocs) as User[];
-  
   const batch = db.batch();
+  let usersToNotify: string[] = [];
 
+  // Create a new UserNotification document for each User
   for (let i = 0; i < users.length; i++) {
     const user = users[i];
     const notification = createNewUserNotification({user: user.id, type: NOTIFICATION_TYPE.ASSIGNED_TAPP, task: task, message: `${owner} has assigned you a Tapp`})

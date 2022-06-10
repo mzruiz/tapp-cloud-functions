@@ -21,7 +21,6 @@ export const handleTappMessageSent = async (props: TappMessageSentProps) => {
 
   const userDocsRef = db.collection(USER_PATH);
   const userDocs = await userDocsRef.where('phone', 'in', recipients).get();
-
   const users = getDocumentsFromQuerySnapshot(userDocs) as User[];
   functions.logger.log('users: ', users);
 
